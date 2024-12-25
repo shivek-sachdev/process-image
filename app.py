@@ -3,12 +3,13 @@ import boto3
 from PIL import Image
 import io
 import base64
-import magic
+import os
 from pathlib import Path
 from typing import Tuple, Union
 
-# Add this at the beginning of your app.py
-import os
+# Constants
+MODEL_ID = "us.meta.llama3-2-90b-instruct-v1:0"
+PAYMENT_PROMPT = "Extract and list only these details from the image: 1. Payment Date (in format dd/mm/yyyy) 2. Payment Amount (in THB)"
 
 # Configure AWS credentials from Streamlit secrets
 if 'aws_credentials' in st.secrets:
@@ -17,22 +18,19 @@ if 'aws_credentials' in st.secrets:
     os.environ['AWS_SECRET_ACCESS_KEY'] = credentials['aws_secret_access_key']
     os.environ['AWS_DEFAULT_REGION'] = credentials['aws_region']
 
-# Modify your init_bedrock_client function
-def init_bedrock_client():
-    return boto3.client(
-        "bedrock-runtime",
-        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-        region_name=os.environ.get('AWS_DEFAULT_REGION')
-    )
-
-# Constants
-MODEL_ID = "us.meta.llama3-2-90b-instruct-v1:0"
-PAYMENT_PROMPT = "Extract and list only these details from the image: 1. Payment Date (in format dd/mm/yyyy) 2. Payment Amount (in THB)"
-
 class ImageUtils:
     @staticmethod
     def resize_img(b64imgstr: str, size: Tuple[int, int] = (256, 256)) -> str:
+        """
+        Resize a base64 encoded image to the specified size.
+        
+        Args:
+            b64imgstr (str): Base64 encoded image string
+            size (tuple): Target size as (width, height)
+            
+        Returns:
+            str: Base64 encoded resized image
+        """
         buffer = io.BytesIO()
         img = base64.b64decode(b64imgstr)
         img = Image.open(io.BytesIO(img))
@@ -42,6 +40,16 @@ class ImageUtils:
 
     @staticmethod
     def img2base64(image_path: Union[str, Path], resize: bool = False) -> str:
+        """
+        Convert an image file to base64 string.
+        
+        Args:
+            image_path (str or Path): Path to the image file
+            resize (bool): Whether to resize the image to 256x256
+            
+        Returns:
+            str: Base64 encoded image
+        """
         with open(image_path, "rb") as img_f:
             img_data = base64.b64encode(img_f.read())
         
@@ -52,10 +60,26 @@ class ImageUtils:
 
     @staticmethod
     def process_image_bytes(image_bytes: bytes, resize: bool = True) -> Tuple[bytes, str]:
-        mime = magic.Magic(mime=True)
-        image_format = mime.from_buffer(image_bytes).split('/')[-1]
+        """
+        Process image bytes - optionally resize and detect format.
+        
+        Args:
+            image_bytes (bytes): Raw image bytes
+            resize (bool): Whether to resize the image
+            
+        Returns:
+            tuple: (processed image bytes, image format)
+        """
+        try:
+            # Try using PIL to determine format
+            img = Image.open(io.BytesIO(image_bytes))
+            image_format = img.format.lower() if img.format else 'png'
+        except Exception:
+            # Default to PNG if format detection fails
+            image_format = 'png'
 
         if resize:
+            # Convert to base64, resize, and back to bytes
             b64_str = base64.b64encode(image_bytes).decode()
             resized_b64 = ImageUtils.resize_img(b64_str)
             return base64.b64decode(resized_b64), image_format
@@ -64,6 +88,15 @@ class ImageUtils:
 
     @staticmethod
     def validate_image(image_bytes: bytes) -> bool:
+        """
+        Validate if the bytes represent a valid image.
+        
+        Args:
+            image_bytes (bytes): Raw image bytes
+            
+        Returns:
+            bool: True if valid image, False otherwise
+        """
         try:
             img = Image.open(io.BytesIO(image_bytes))
             img.verify()
@@ -72,9 +105,26 @@ class ImageUtils:
             return False
 
 def init_bedrock_client():
-    return boto3.client("bedrock-runtime")
+    """Initialize Amazon Bedrock client with credentials."""
+    return boto3.client(
+        "bedrock-runtime",
+        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        region_name=os.environ.get('AWS_DEFAULT_REGION')
+    )
 
 def process_image_with_bedrock(client, image_bytes: bytes, image_format: str):
+    """
+    Process image with Amazon Bedrock API.
+    
+    Args:
+        client: Bedrock client instance
+        image_bytes (bytes): Processed image bytes
+        image_format (str): Image format (e.g., 'png', 'jpeg')
+        
+    Returns:
+        str: API response text
+    """
     messages = [
         {
             "role": "user",
@@ -105,14 +155,17 @@ def process_image_with_bedrock(client, image_bytes: bytes, image_format: str):
         return None
 
 def main():
+    """Main application function."""
     st.title("Payment Information Extractor")
     
     uploaded_file = st.file_uploader("Upload payment slip/receipt...", type=["jpg", "jpeg", "png"])
     
     if uploaded_file is not None:
         try:
+            # Read image bytes
             image_bytes = uploaded_file.read()
             
+            # Validate image
             if not ImageUtils.validate_image(image_bytes):
                 st.error("Invalid image file. Please upload a valid image.")
                 return
