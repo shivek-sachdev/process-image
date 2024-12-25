@@ -7,6 +7,25 @@ import magic
 from pathlib import Path
 from typing import Tuple, Union
 
+# Add this at the beginning of your app.py
+import os
+
+# Configure AWS credentials from Streamlit secrets
+if 'aws_credentials' in st.secrets:
+    credentials = st.secrets['aws_credentials']
+    os.environ['AWS_ACCESS_KEY_ID'] = credentials['aws_access_key_id']
+    os.environ['AWS_SECRET_ACCESS_KEY'] = credentials['aws_secret_access_key']
+    os.environ['AWS_DEFAULT_REGION'] = credentials['aws_region']
+
+# Modify your init_bedrock_client function
+def init_bedrock_client():
+    return boto3.client(
+        "bedrock-runtime",
+        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        region_name=os.environ.get('AWS_DEFAULT_REGION')
+    )
+
 # Constants
 MODEL_ID = "us.meta.llama3-2-90b-instruct-v1:0"
 PAYMENT_PROMPT = "Extract and list only these details from the image: 1. Payment Date (in format dd/mm/yyyy) 2. Payment Amount (in THB)"
