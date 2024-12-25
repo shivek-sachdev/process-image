@@ -9,7 +9,7 @@ from typing import Tuple, Union
 
 # Constants
 MODEL_ID = "us.meta.llama3-2-90b-instruct-v1:0"
-PAYMENT_PROMPT = """Extract only the date and amount from this image. If the date is in Thai calendar (BE), subtract 543 years to convert to Gregorian calendar (CE). Output in exactly this format:
+PAYMENT_PROMPT = """Extract only the date and amount from this image. Date may be in Thai calendar (BE), convert to Gregorian calendar (CE). Output in exactly this format - do not provide steps or calculations:
 Date: dd/mm/yyyy
 Amount: xxx THB"""
 MAX_IMAGE_SIZE = 1120  # Llama 3.2 Vision maximum image size
