@@ -10,6 +10,7 @@ from typing import Tuple, Union
 # Constants
 MODEL_ID = "us.meta.llama3-2-90b-instruct-v1:0"
 PAYMENT_PROMPT = "Extract and list only these details from the image: 1. Payment Date (in format dd/mm/yyyy) 2. Payment Amount (in THB)"
+MAX_IMAGE_SIZE = 1120  # Llama 3.2 Vision maximum image size
 
 # Configure AWS credentials from Streamlit secrets
 if 'aws_credentials' in st.secrets:
@@ -20,13 +21,13 @@ if 'aws_credentials' in st.secrets:
 
 class ImageUtils:
     @staticmethod
-    def resize_img(b64imgstr: str, size: Tuple[int, int] = (256, 256)) -> str:
+    def resize_img(b64imgstr: str, max_size: int = MAX_IMAGE_SIZE) -> str:
         """
-        Resize a base64 encoded image to the specified size.
+        Resize a base64 encoded image to fit within max_size while maintaining aspect ratio.
         
         Args:
             b64imgstr (str): Base64 encoded image string
-            size (tuple): Target size as (width, height)
+            max_size (int): Maximum dimension size (default 1120 for Llama 3.2)
             
         Returns:
             str: Base64 encoded resized image
@@ -34,7 +35,25 @@ class ImageUtils:
         buffer = io.BytesIO()
         img = base64.b64decode(b64imgstr)
         img = Image.open(io.BytesIO(img))
-        rimg = img.resize(size, Image.LANCZOS)
+        
+        # Calculate new size maintaining aspect ratio
+        width, height = img.size
+        if width > height:
+            if width > max_size:
+                new_width = max_size
+                new_height = int((height * max_size) / width)
+            else:
+                new_width = width
+                new_height = height
+        else:
+            if height > max_size:
+                new_height = max_size
+                new_width = int((width * max_size) / height)
+            else:
+                new_width = width
+                new_height = height
+                
+        rimg = img.resize((new_width, new_height), Image.LANCZOS)
         rimg.save(buffer, format=img.format)
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
@@ -45,7 +64,7 @@ class ImageUtils:
         
         Args:
             image_path (str or Path): Path to the image file
-            resize (bool): Whether to resize the image to 256x256
+            resize (bool): Whether to resize the image
             
         Returns:
             str: Base64 encoded image
@@ -174,7 +193,7 @@ def main():
             image = Image.open(io.BytesIO(image_bytes))
             st.image(image, caption='Uploaded Image', use_column_width=True)
             
-            # Process image without displaying the processed version
+            # Process image with Llama 3.2 Vision size limit (1120x1120)
             processed_bytes, image_format = ImageUtils.process_image_bytes(image_bytes, resize=True)
             
             if st.button('Extract Payment Information'):
