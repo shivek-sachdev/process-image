@@ -9,7 +9,9 @@ from typing import Tuple, Union
 
 # Constants
 MODEL_ID = "us.meta.llama3-2-90b-instruct-v1:0"
-PAYMENT_PROMPT = "Extract and list only these details from the image: 1. Payment Date (in format dd/mm/yyyy) 2. Payment Amount (in THB)"
+PAYMENT_PROMPT = """Extract only the date and amount from this image. If the date is in Thai calendar (BE), subtract 543 years to convert to Gregorian calendar (CE). Output in exactly this format:
+Date: dd/mm/yyyy
+Amount: xxx THB"""
 MAX_IMAGE_SIZE = 1120  # Llama 3.2 Vision maximum image size
 
 # Configure AWS credentials from Streamlit secrets
