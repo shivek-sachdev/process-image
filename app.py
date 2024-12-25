@@ -9,10 +9,14 @@ from typing import Tuple, Union
 
 # Constants
 MODEL_ID = "us.meta.llama3-2-90b-instruct-v1:0"
-PAYMENT_PROMPT = """Extract only the date and amount from this image. Date may be in Thai calendar (BE), convert to Gregorian calendar (CE). Output in exactly this format - do not provide steps or calculations:
+DEFAULT_PAYMENT_PROMPT = """Extract only the date and amount from this image. Date may be in Thai calendar (BE), convert to Gregorian calendar (CE). In your answer do not provide steps or calculations, note that 2567 is 2024, not 2023. Output must be in exactly this format - :
 Date: dd/mm/yyyy
 Amount: xxx THB"""
 MAX_IMAGE_SIZE = 1120  # Llama 3.2 Vision maximum image size
+
+# Initialize session state for storing the prompt
+if 'payment_prompt' not in st.session_state:
+    st.session_state.payment_prompt = DEFAULT_PAYMENT_PROMPT
 
 # Configure AWS credentials from Streamlit secrets
 if 'aws_credentials' in st.secrets:
@@ -159,7 +163,7 @@ def process_image_with_bedrock(client, image_bytes: bytes, image_format: str):
                     }
                 },
                 {
-                    "text": PAYMENT_PROMPT
+                    "text": st.session_state.payment_prompt  # Use the prompt from session state
                 }
             ]
         }
@@ -175,9 +179,36 @@ def process_image_with_bedrock(client, image_bytes: bytes, image_format: str):
         st.error(f"API Error: {str(e)}")
         return None
 
+def show_config():
+    """Show configuration sidebar."""
+    with st.sidebar:
+        st.header("Configuration")
+        
+        # Add prompt configuration
+        st.subheader("System Prompt")
+        new_prompt = st.text_area(
+            "Edit the system prompt",
+            value=st.session_state.payment_prompt,
+            height=200,
+            help="Modify the prompt that will be sent to the model along with the image."
+        )
+        
+        # Add save button
+        if st.button("Save Configuration"):
+            st.session_state.payment_prompt = new_prompt
+            st.success("Configuration saved successfully!")
+        
+        # Add reset button
+        if st.button("Reset to Default"):
+            st.session_state.payment_prompt = DEFAULT_PAYMENT_PROMPT
+            st.success("Prompt reset to default!")
+
 def main():
     """Main application function."""
     st.title("Payment Information Extractor")
+    
+    # Show configuration sidebar
+    show_config()
     
     uploaded_file = st.file_uploader("Upload payment slip/receipt...", type=["jpg", "jpeg", "png"])
     
